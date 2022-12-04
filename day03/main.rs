@@ -1,7 +1,6 @@
 use std::fs;
 use std::collections::HashSet;
 use std::iter::FromIterator;
-use std::process;
 
 fn get_priority(c: &char) -> i32 {
     if c.is_ascii_uppercase() {
