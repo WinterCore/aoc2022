@@ -12,4 +12,9 @@ fi
 
 cd $day
 
-rustc main.rs -o compiled && ./compiled
+if [ $day == "day09" ]
+then
+    cargo run --bin day09
+else
+    rustc main.rs -o compiled && ./compiled
+fi
