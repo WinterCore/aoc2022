@@ -8,6 +8,10 @@ edition = "2021"
 name = "day09"
 path = "day09/main.rs"
 
+[[bin]]
+name = "day10"
+path = "day10/main.rs"
+
 
 [dependencies]
 ncurses = "5.101.0"
