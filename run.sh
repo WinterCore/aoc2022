@@ -12,10 +12,4 @@ fi
 
 cd $day
 
-# Days that require dependencies
-if [ $day == "day09" ] || [ $day == "day10" ]
-then
-    cargo run --bin $day
-else
-    rustc main.rs -o compiled && ./compiled
-fi
+cargo run --bin $day

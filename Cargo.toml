@@ -5,6 +5,38 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
+name = "day01"
+path = "day01/main.rs"
+
+[[bin]]
+name = "day02"
+path = "day02/main.rs"
+
+[[bin]]
+name = "day03"
+path = "day03/main.rs"
+
+[[bin]]
+name = "day04"
+path = "day04/main.rs"
+
+[[bin]]
+name = "day05"
+path = "day05/main.rs"
+
+[[bin]]
+name = "day06"
+path = "day06/main.rs"
+
+[[bin]]
+name = "day07"
+path = "day07/main.rs"
+
+[[bin]]
+name = "day08"
+path = "day08/main.rs"
+
+[[bin]]
 name = "day09"
 path = "day09/main.rs"
 
@@ -15,6 +47,11 @@ path = "day10/main.rs"
 [[bin]]
 name = "day11"
 path = "day11/main.rs"
+
+[[bin]]
+name = "day12"
+path = "day12/main.rs"
+
 
 
 [dependencies]
