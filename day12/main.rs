@@ -154,8 +154,8 @@ fn main() {
 
     let parsed = parse(&contents);
 
-    println!("Part 1: {}", part1(&parsed, false));
-    println!("Part 2: {}", part2(&parsed, false));
+    println!("Part 1: {}", part1(&parsed, true));
+    println!("Part 2: {}", part2(&parsed, true));
 }
 
 fn part1(em: &ElevationMap, render: bool) -> String {
