@@ -12,4 +12,4 @@ fi
 
 cd $day
 
-cargo run --bin $day
+cargo run --bin "$@"
