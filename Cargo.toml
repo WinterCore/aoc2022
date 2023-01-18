@@ -68,6 +68,10 @@ path = "day15/main.rs"
 name = "day16"
 path = "day16/main.rs"
 
+[[bin]]
+name = "day17"
+path = "day17/main.rs"
+
 
 [dependencies]
 ncurses = "5.101.0"
