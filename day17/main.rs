@@ -1,8 +1,8 @@
-use std::{fs, collections::{HashSet, HashMap}, char::CharTryFromError, thread::sleep, time::{Duration, Instant}, cmp};
+use std::{fs, collections::{HashSet, HashMap}, cmp, hash::Hash};
 use ncurses::*;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-struct Point(i32, i32);
+struct Point(i64, i64);
 
 
 #[derive(Debug, Clone)]
@@ -34,19 +34,6 @@ impl RockCluster {
 
         RockCluster { points }
     }
-
-    fn is_colliding_with_rock(&self, target: &Self) -> bool {
-        self.points
-            .iter()
-            .any(|p| target.is_colliding_with_point(p))
-    }
-
-    fn is_colliding_with_point(&self, p: &Point) -> bool {
-        self
-            .points
-            .iter()
-            .any(|tp| tp.0 == p.0 && tp.1 == p.1)
-    }
 }
 
 
@@ -69,21 +56,15 @@ impl Direction {
 
 #[derive(Debug)]
 struct Chamber {
-    rested: HashMap<i32, HashSet<Point>>,
-    width: u32,
-    height_reached: u32,
+    rested: HashMap<i64, HashSet<Point>>,
+    width: u64,
+    height_reached: u64,
 }
-
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static MS: AtomicUsize = AtomicUsize::new(0);
-
 
 impl Chamber {
     fn move_rock_dir(&self, rock: &RockCluster, dir: &Direction) -> Option<RockCluster> {
         let new_rock = rock.move_by(dir.to_move_delta());
         
-        // let is_colliding_with_rested_rocks = points.iter().any(|p| new_rock.is_colliding_with_point(p));
         let mut is_colliding_with_rested_rocks = false;
         
         for point in new_rock.points.iter() {
@@ -100,13 +81,9 @@ impl Chamber {
             }
         }
 
-        let is_colliding_with_walls = new_rock.points.iter().any(|p| p.0 < 0 || (self.width as i32) <= p.0);
+        let is_colliding_with_walls = new_rock.points.iter().any(|p| p.0 < 0 || (self.width as i64) <= p.0);
         let is_colliding_with_floor = new_rock.points.iter().any(|p| p.1 < 0);
 
-        // println!("{:?}\n{:?}\n{:?}\n\n", rows, points, self.rested);
-
-        // println!("\n");
-        // println!("{:?} {:?} {:?} {:?}", new_rock, is_colliding_with_floor, is_colliding_with_walls, is_colliding_with_rested_rocks);
         if is_colliding_with_floor || is_colliding_with_walls || is_colliding_with_rested_rocks {
             return None;
         }
@@ -120,7 +97,7 @@ impl Chamber {
                 .iter()
                 .map(|x| x.1 + 1)
                 .max()
-                .unwrap_or(0) as u32
+                .unwrap_or(0) as u64
         );
 
         rock
@@ -152,21 +129,15 @@ impl Chamber {
 
         let mut down = false;
 
-        // println!("\n\n\n");
-
         loop {
             let jet = &gas_jets[*gas_jet_idx % gas_jets.len()];
             let dir = if down { &Direction::Down } else { jet };
 
             let moved_rock = self.move_rock_dir(&rock, dir);
-            // println!("{:?}", instant.elapsed().as_micros());
             
             if render {
                 draw(self, gas_jets, *gas_jet_idx % gas_jets.len(), &rock);
             }
-            // println!("{:?} {:?}", dir, moved_rock.as_ref().unwrap_or(&rock));
-            
-
 
             if down {
                 match moved_rock {
@@ -174,7 +145,6 @@ impl Chamber {
                         rock = new_rock;
                     },
                     None => {
-                        // println!("Resting {:?}", rock);
                         self.rest_rock_cluster(rock.clone());
                         break;
                     },
@@ -187,9 +157,6 @@ impl Chamber {
                 }
             }
 
-            getch();
-            // sleep(Duration::from_millis(100));
-            // sleep(Duration::from_millis(200));
             down = ! down;
         }
 
@@ -232,7 +199,7 @@ fn draw(
     let shift_x = 1;
     // let raw_shift_y = falling_rock.points.iter().max_by_key(|x| x.1).unwrap().1 * -1 + height / 2;
     let shift_y = cmp::max(
-        (height - 1) + (max_y - min_y) - height / 2,
+        (height - 1) + (*max_y as i32 - *min_y as i32) - height / 2,
         height - 1,
     );
 
@@ -253,15 +220,15 @@ fn draw(
 
     // Draw rested rocks 
     for points in chamber.rested.values() {
-        for Point(x, y) in points.iter() {
-            mvaddch((y * -1) + shift_y, x + shift_x, '#' as u32);
+        for &Point(x, y) in points.iter() {
+            mvaddch((y as i32 * -1) + shift_y, x as i32 + shift_x, '#' as u32);
         }
     }
 
 
     // Draw falling rock
-    for Point(x, y) in falling_rock.points.iter() {
-        mvaddch((y * -1) + shift_y, x + shift_x, '@' as u32);
+    for &Point(x, y) in falling_rock.points.iter() {
+        mvaddch((y as i32 * -1) + shift_y, x as i32 + shift_x, '@' as u32);
     }
 
 
@@ -301,16 +268,49 @@ fn draw(
 }
 
 fn main() {
-    let contents = fs::read_to_string("./exampleinput")
+    let contents = fs::read_to_string("./input")
         .expect("File not found");
 
     let parsed: Vec<Direction> = parse(&contents);
 
-    println!("Part 1: {}", part1(&parsed, true));
-    println!("Part 2: {}", part2());
+    println!("Part 1: {}", part1(&parsed, false));
+    println!("Part 2: {}", part2(&parsed, false));
+}
+
+fn is_prime(n: u64) -> bool {
+    if n <= 1 {
+        return false;
+    }
+
+    if n % 2 == 0 && n > 2 {
+        return false;
+    }
+
+    let s = (n as f64).sqrt();
+    for a in (3..=(s as u64)).step_by(2) {
+        if n % a == 0 {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn part1(gas_jets: &Vec<Direction>, render: bool) -> String {
+    let result = simulate(gas_jets, 2022, render);
+
+    String::from(result.to_string())
+}
+
+
+fn part2(gas_jets: &Vec<Direction>, render: bool) -> String {
+    let result = simulate(gas_jets, 1000000000000, render);
+
+    String::from(result.to_string())
+}
+
+
+fn simulate(gas_jets: &Vec<Direction>, rocks_max: usize, render: bool) -> u64 {
     if render {
         initscr();
         use_default_colors();
@@ -318,7 +318,6 @@ fn part1(gas_jets: &Vec<Direction>, render: bool) -> String {
         init_pair(1, COLOR_BLACK, COLOR_GREEN);
     }
 
-    let instant = Instant::now();
     let rock_clusters = RockCluster::get_rock_clusters();
     let mut gas_jet_idx = 0;
 
@@ -328,11 +327,48 @@ fn part1(gas_jets: &Vec<Direction>, render: bool) -> String {
         height_reached: 0,
     };
 
-    for rock_num in 0..2022 {
-        let raw_rock_cluster = rock_clusters[rock_num % rock_clusters.len()].clone();
+    let mut init_heights_hash = HashMap::<(usize, usize), (u64, usize)>::new();
+    let mut cycle_hash = HashMap::<(usize, usize), (u64, usize)>::new();
+
+    let mut rock_num = 0;
+    while rock_num < rocks_max {
+        let rock_idx = rock_num % rock_clusters.len();
+        let jet_idx = gas_jet_idx % gas_jets.len();
+
+        let existing = init_heights_hash.get(&(rock_idx, jet_idx));
+
+        if let Some((height, _)) = existing {
+            if is_prime(*height) && chamber.height_reached % height == 0 {
+                let existing = cycle_hash.get(&(rock_idx, jet_idx));
+                if let Some(data) = existing {
+                    let cycle_num_rocks = rock_num - data.1;
+                    let cycle_rock_height = chamber.height_reached - data.0;
+                    let repeats = (rocks_max - rock_num) / cycle_num_rocks;
+                    let height_diff = repeats as u64 * cycle_rock_height;
+
+                    let mut new_rested: HashMap<i64, HashSet<Point>> = HashMap::new();
+                    for (&key, points) in chamber.rested.iter() {
+                        let new_points = points
+                            .iter()
+                            .map(|&Point(x, y)| Point(x, y + height_diff as i64))
+                            .collect();
+                        new_rested.insert((key as u64 + height_diff) as i64, new_points);
+                    }
+
+                    chamber.rested = new_rested;
+
+                    rock_num += repeats * cycle_num_rocks;
+                    chamber.height_reached += height_diff;
+                } else {
+                    cycle_hash.insert((rock_idx, jet_idx), (chamber.height_reached, rock_num));
+                }
+            }
+        }
+
+        let raw_rock_cluster = rock_clusters[rock_idx].clone();
 
         let rock_cluster = raw_rock_cluster
-            .move_by(Point(2, chamber.height_reached as i32 + 3));
+            .move_by(Point(2, chamber.height_reached as i64 + 3));
 
         chamber.simulate_rock_fall(
             gas_jets,
@@ -341,13 +377,15 @@ fn part1(gas_jets: &Vec<Direction>, render: bool) -> String {
             render,
         );
 
-        if rock_num % rock_clusters.len() == 0 && gas_jet_idx % gas_jets.len() == 0 {
-            println!("{}", chamber.height_reached);
+        if let None = existing {
+            init_heights_hash.insert(
+                (rock_idx, jet_idx),
+                (chamber.height_reached, rock_num),
+            );
         }
-    }
 
-    MS.fetch_add(instant.elapsed().as_micros() as usize, Ordering::SeqCst);
-    println!("{:?}", MS.load(Ordering::Relaxed) / 1000);
+        rock_num += 1;
+    }
 
     if render {
         getch();
@@ -355,10 +393,5 @@ fn part1(gas_jets: &Vec<Direction>, render: bool) -> String {
     }
 
 
-    String::from(chamber.height_reached.to_string())
-}
-
-
-fn part2() -> String {
-    String::from("")
+    chamber.height_reached
 }
