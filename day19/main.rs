@@ -1,12 +1,15 @@
-use std::{fs, str::FromStr};
+use std::{fs, str::FromStr, collections::HashMap};
 
 #[derive(Debug)]
-enum MaterialRequirement {
-    Ore(u32),
-    Clay(u32),
-    Obsidian(u32),
-    Geode(u32),
+enum Material {
+    Ore,
+    Clay,
+    Obsidian,
+    Geode,
 }
+
+#[derive(Debug)]
+struct MaterialRequirement(Material, u32);
 
 #[derive(Debug)]
 struct ParseMaterialRequirementError;
@@ -25,10 +28,9 @@ impl FromStr for MaterialRequirement {
             .ok_or(ParseMaterialRequirementError)?;
 
         let result = match *ore_name {
-            "ore" => MaterialRequirement::Ore(ore_amount),
-            "clay" => MaterialRequirement::Clay(ore_amount),
-            "obsidian" => MaterialRequirement::Obsidian(ore_amount),
-            "geode" => MaterialRequirement::Geode(ore_amount),
+            "ore" => MaterialRequirement(Material::Ore, ore_amount),
+            "clay" => MaterialRequirement(Material::Clay, ore_amount),
+            "obsidian" => MaterialRequirement(Material::Obsidian, ore_amount),
             _ => return Err(ParseMaterialRequirementError),
         };
 
@@ -43,7 +45,7 @@ struct Blueprint {
     ore_robot: Vec<MaterialRequirement>,
     clay_robot: Vec<MaterialRequirement>,
     obsidian_robot: Vec<MaterialRequirement>,
-    goede_robot: Vec<MaterialRequirement>,
+    geode_robot: Vec<MaterialRequirement>,
 }
 
 impl Blueprint {
@@ -80,7 +82,7 @@ impl FromStr for Blueprint {
         let mut ore_robot = vec![];
         let mut clay_robot = vec![];
         let mut obsidian_robot = vec![];
-        let mut goede_robot = vec![];
+        let mut geode_robot = vec![];
 
         let part2 = split.get(1).ok_or(ParseBlueprintError)?;
 
@@ -97,7 +99,7 @@ impl FromStr for Blueprint {
                 "ore" => { ore_robot = requirements },
                 "clay" => { clay_robot = requirements },
                 "obsidian" => { obsidian_robot = requirements },
-                "geode" => { goede_robot = requirements },
+                "geode" => { geode_robot = requirements },
                 _ => return Err(ParseBlueprintError)
             }
         }
@@ -107,7 +109,7 @@ impl FromStr for Blueprint {
             ore_robot,
             clay_robot,
             obsidian_robot,
-            goede_robot,
+            geode_robot,
         })
     }
 }
@@ -128,10 +130,248 @@ fn main() {
     println!("Part 2: {}", part2(&blueprints));
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct State {
+    ore_robots: u32,
+    ore: u32,
+    clay_robots: u32,
+    clay: u32,
+    obsidian_robots: u32,
+    obsidian: u32,
+    geode_robots: u32,
+    geodes_open: u32,
+
+    pending_ore_robots: u32,
+    pending_clay_robots: u32,
+    pending_obsidian_robots: u32,
+    pending_geode_robots: u32,
+}
+
+impl State {
+    fn new(ore_robots: u32) -> Self {
+        State {
+            ore_robots,
+            ore:                     0,
+            clay_robots:             0,
+            clay:                    0,
+            obsidian_robots:         0,
+            obsidian:                0,
+            geode_robots:            0,
+            geodes_open:             0,
+
+            pending_ore_robots:      0,
+            pending_clay_robots:     0,
+            pending_obsidian_robots: 0,
+            pending_geode_robots:    0,
+        }
+    }
+
+    fn mine_material(&mut self) {
+        self.ore         += self.ore_robots;
+        self.clay        += self.clay_robots;
+        self.obsidian    += self.obsidian_robots;
+        self.geodes_open += self.geode_robots;
+    }
+
+    fn commit_manufactured_robots(&mut self) {
+        self.ore_robots      += self.pending_ore_robots;
+        self.clay_robots     += self.pending_clay_robots;
+        self.obsidian_robots += self.pending_obsidian_robots;
+        self.geode_robots    += self.pending_geode_robots;
+
+        self.pending_ore_robots      = 0;
+        self.pending_clay_robots     = 0;
+        self.pending_obsidian_robots = 0;
+        self.pending_geode_robots    = 0;
+    }
+
+    fn manufacture_robots(
+        &mut self,
+        requirements: &Vec<MaterialRequirement>,
+    ) -> u32 {
+        let mut total: u32 = u32::MAX;
+
+        for requirement in requirements {
+            let num = match requirement {
+                MaterialRequirement(Material::Ore, v) =>
+                    self.ore / v,
+                MaterialRequirement(Material::Clay, v) =>
+                    self.clay / v,
+                MaterialRequirement(Material::Obsidian, v) =>
+                    self.obsidian / v,
+                MaterialRequirement(Material::Geode, _) =>
+                    0,
+            };
+
+            total = total.min(num);
+        }
+
+        for requirement in requirements {
+            match requirement {
+                MaterialRequirement(Material::Ore, v) =>
+                    self.ore -= total * v,
+                MaterialRequirement(Material::Clay, v) =>
+                    self.clay -= total * v,
+                MaterialRequirement(Material::Obsidian, v) =>
+                    self.obsidian -= total * v,
+                MaterialRequirement(Material::Geode, _) =>
+                    {},
+            }
+        }
+
+        total
+    }
+
+
+    fn meets_requirements(&self, requirements: &Vec<MaterialRequirement>) -> bool {
+        let mut total: u32 = u32::MAX;
+
+        for requirement in requirements {
+            let num = match requirement {
+                MaterialRequirement(Material::Ore, v) =>
+                    self.ore / v,
+                MaterialRequirement(Material::Clay, v) =>
+                    self.clay / v,
+                MaterialRequirement(Material::Obsidian, v) =>
+                    self.obsidian / v,
+                MaterialRequirement(Material::Geode, _) =>
+                    0,
+            };
+
+            total = total.min(num);
+        }
+
+        total > 0
+    }
+}
+
 fn part1(blueprints: &Vec<Blueprint>) -> String {
+    let state = State::new(1);
+    let mut memo: HashMap<(State, u32), State> = HashMap::new();
+    let result = simulate_blueprint(&blueprints[0], &state, 24, &mut memo);
+    println!("{result:?}");
+
     String::from("")
 }
 
+
+
 fn part2(blueprints: &Vec<Blueprint>) -> String {
+    
+
     String::from("")
+}
+
+fn simulate_blueprint(
+    blueprint: &Blueprint,
+    state: &State,
+    duration: u32,
+    memo: &mut HashMap<(State, u32), State>
+) -> State {
+    if duration == 0 {
+        return state.clone();
+    }
+
+    let maybe_memoed = memo.get(&(state.clone(), duration));
+
+    if let Some(found_state) = maybe_memoed {
+        // println!("Found: {found_state:?}\n");
+        return found_state.clone();
+    }
+
+    let mut states: Vec<State> = vec![];
+
+    // Build geode robots as soon as possible, it doesn't make sense to wait here
+    if state.meets_requirements(&blueprint.geode_robot) {
+        // Build geode robots
+        let mut state1 = state.clone();
+        state1.pending_geode_robots = state1.manufacture_robots(&blueprint.geode_robot);
+        state1.mine_material();
+        state1.commit_manufactured_robots();
+
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
+    }
+
+
+    if state.meets_requirements(&blueprint.obsidian_robot) {
+        // Build obsidian robots
+        let mut state1 = state.clone();
+        state1.pending_obsidian_robots = state1.manufacture_robots(&blueprint.obsidian_robot);
+        state1.mine_material();
+        state1.commit_manufactured_robots();
+
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
+    }
+
+    if state.meets_requirements(&blueprint.clay_robot) {
+        // Build obsidian robots
+        let mut state1 = state.clone();
+        state1.pending_clay_robots = state1.manufacture_robots(&blueprint.clay_robot);
+        state1.mine_material();
+        state1.commit_manufactured_robots();
+
+        // Do nothing
+        let mut state2 = state.clone();
+        state2.mine_material();
+        state2.commit_manufactured_robots();
+
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
+        states.push(simulate_blueprint(blueprint, &state2, duration - 1, memo));
+    }
+
+    if state.meets_requirements(&blueprint.ore_robot) {
+        // Build obsidian robots
+        let mut state1 = state.clone();
+        state1.pending_ore_robots = state1.manufacture_robots(&blueprint.ore_robot);
+        state1.mine_material();
+        state1.commit_manufactured_robots();
+
+        // Do nothing
+        let mut state2 = state.clone();
+        state2.mine_material();
+        state2.commit_manufactured_robots();
+
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
+        states.push(simulate_blueprint(blueprint, &state2, duration - 1, memo));
+    }
+    
+    if states.len() == 0 {
+        let mut state1 = state.clone();
+        state1.mine_material();
+        state1.commit_manufactured_robots();
+        let result = simulate_blueprint(blueprint, &state1, duration - 1, memo);
+        memo.insert((state.clone(), duration), result.clone());
+        // println!("State if: {result:?}\n");
+        result
+    } else {
+        let result = states.iter().max_by(|x, y| {
+            if x.geodes_open != y.geodes_open {
+                return x.geodes_open.cmp(&y.geodes_open);
+            }
+
+            if x.geode_robots != y.geode_robots {
+                return x.geode_robots.cmp(&y.geode_robots);
+            }
+
+            if x.obsidian_robots != y.obsidian_robots {
+                return x.obsidian_robots.cmp(&y.obsidian_robots);
+            }
+
+            if x.clay_robots != y.clay_robots {
+                return x.clay_robots.cmp(&y.clay_robots);
+            }
+
+            if x.ore_robots != y.ore_robots {
+                return x.ore_robots.cmp(&y.ore_robots);
+            }
+
+            x.ore.cmp(&y.ore)
+        }).unwrap().clone();
+        // println!("States else: {states:#?}");
+        // println!("State else: {result:?}");
+
+        memo.insert((state.clone(), duration), result.clone());
+
+        result
+    }
 }
