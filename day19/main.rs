@@ -130,7 +130,7 @@ fn main() {
     println!("Part 2: {}", part2(&blueprints));
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd)]
 struct State {
     ore_robots: u32,
     ore: u32,
@@ -146,6 +146,41 @@ struct State {
     pending_obsidian_robots: u32,
     pending_geode_robots: u32,
 }
+
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.geodes_open != other.geodes_open {
+            return self.geodes_open.cmp(&other.geodes_open);
+        }
+
+        if self.geode_robots != other.geode_robots {
+            return self.geode_robots.cmp(&other.geode_robots);
+        }
+
+        if self.obsidian != other.obsidian {
+            return self.obsidian.cmp(&other.obsidian);
+        }
+
+        if self.obsidian_robots != other.obsidian_robots {
+            return self.obsidian_robots.cmp(&other.obsidian_robots);
+        }
+
+        if self.clay != other.clay {
+            return self.clay.cmp(&other.clay);
+        }
+
+        if self.clay_robots != other.clay_robots {
+            return self.clay_robots.cmp(&other.clay_robots);
+        }
+
+        if self.ore_robots != other.ore_robots {
+            return self.ore_robots.cmp(&other.ore_robots);
+        }
+
+        self.ore.cmp(&other.ore)
+    }
+}
+
 
 impl State {
     fn new(ore_robots: u32) -> Self {
@@ -248,7 +283,8 @@ impl State {
 fn part1(blueprints: &Vec<Blueprint>) -> String {
     let state = State::new(1);
     let mut memo: HashMap<(State, u32), State> = HashMap::new();
-    let result = simulate_blueprint(&blueprints[0], &state, 24, &mut memo);
+    let mut max_cache: HashMap<u32, State> = HashMap::new();
+    let result = simulate_blueprint(&blueprints[0], &state, 24, &mut memo, &mut max_cache);
     println!("{result:?}");
 
     String::from("")
@@ -266,10 +302,19 @@ fn simulate_blueprint(
     blueprint: &Blueprint,
     state: &State,
     duration: u32,
-    memo: &mut HashMap<(State, u32), State>
+    memo: &mut HashMap<(State, u32), State>,
+    max_cache: &mut HashMap<u32, State>,
 ) -> State {
     if duration == 0 {
         return state.clone();
+    }
+
+    let maybe_max = max_cache.get(&duration);
+
+    if let Some(maybe_max) = maybe_max {
+        if maybe_max > state {
+            return maybe_max.clone();
+        }
     }
 
     let maybe_memoed = memo.get(&(state.clone(), duration));
@@ -289,7 +334,7 @@ fn simulate_blueprint(
         state1.mine_material();
         state1.commit_manufactured_robots();
 
-        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo, max_cache));
     }
 
 
@@ -300,7 +345,7 @@ fn simulate_blueprint(
         state1.mine_material();
         state1.commit_manufactured_robots();
 
-        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo, max_cache));
     }
 
     if state.meets_requirements(&blueprint.clay_robot) {
@@ -315,8 +360,8 @@ fn simulate_blueprint(
         state2.mine_material();
         state2.commit_manufactured_robots();
 
-        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
-        states.push(simulate_blueprint(blueprint, &state2, duration - 1, memo));
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo, max_cache));
+        states.push(simulate_blueprint(blueprint, &state2, duration - 1, memo, max_cache));
     }
 
     if state.meets_requirements(&blueprint.ore_robot) {
@@ -331,46 +376,48 @@ fn simulate_blueprint(
         state2.mine_material();
         state2.commit_manufactured_robots();
 
-        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo));
-        states.push(simulate_blueprint(blueprint, &state2, duration - 1, memo));
+        states.push(simulate_blueprint(blueprint, &state1, duration - 1, memo, max_cache));
+        states.push(simulate_blueprint(blueprint, &state2, duration - 1, memo, max_cache));
     }
     
     if states.len() == 0 {
         let mut state1 = state.clone();
         state1.mine_material();
         state1.commit_manufactured_robots();
-        let result = simulate_blueprint(blueprint, &state1, duration - 1, memo);
+        let result = simulate_blueprint(blueprint, &state1, duration - 1, memo, max_cache);
         memo.insert((state.clone(), duration), result.clone());
-        // println!("State if: {result:?}\n");
+
+
+        let best_existing_state = max_cache.get(&duration);
+        match best_existing_state {
+            Some(state) => {
+                if &result > state {
+                    max_cache.insert(duration, result.clone());
+                }
+            },
+            None => {
+                max_cache.insert(duration, result.clone());
+            },
+        }
+
         result
     } else {
-        let result = states.iter().max_by(|x, y| {
-            if x.geodes_open != y.geodes_open {
-                return x.geodes_open.cmp(&y.geodes_open);
-            }
-
-            if x.geode_robots != y.geode_robots {
-                return x.geode_robots.cmp(&y.geode_robots);
-            }
-
-            if x.obsidian_robots != y.obsidian_robots {
-                return x.obsidian_robots.cmp(&y.obsidian_robots);
-            }
-
-            if x.clay_robots != y.clay_robots {
-                return x.clay_robots.cmp(&y.clay_robots);
-            }
-
-            if x.ore_robots != y.ore_robots {
-                return x.ore_robots.cmp(&y.ore_robots);
-            }
-
-            x.ore.cmp(&y.ore)
-        }).unwrap().clone();
-        // println!("States else: {states:#?}");
-        // println!("State else: {result:?}");
+        let result = states.iter().max().unwrap().clone();
 
         memo.insert((state.clone(), duration), result.clone());
+        // println!("States {states:?} \n\nMax {result:?}\n");
+
+        let best_existing_state = max_cache.get(&duration);
+        match best_existing_state {
+            Some(state) => {
+                if &result > state {
+                    max_cache.insert(duration, result.clone());
+                }
+            },
+            None => {
+                max_cache.insert(duration, result.clone());
+            },
+        }
 
         result
     }
